@@ -1,16 +1,5 @@
 import axios, { AxiosInstance } from 'axios';
-import {
-    AuthRequest,
-    AuthResponse,
-    MessageReceiveRequest,
-    MessageReceiveResponse,
-    InitiateHandshakeRequest,
-    InitiateHandshakeResponse,
-    SendMessageRequest,
-    SendMessageResponse,
-    RequestPassCodeRequest,
-    RequestPassCodeResponse
-} from './types/index';
+import { AuthRequest, AuthResponse, InitiateHandshakeRequest, InitiateHandshakeResponse, MessageReceiveRequest, MessageReceiveResponse, RequestPassCodeResponse, SendMessageRequest, SendMessageResponse } from './type';
 
 export interface OpenMsgClientConfig {
     domain: string;

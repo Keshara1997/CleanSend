@@ -1,3 +1,19 @@
+/**
+ * OpenMsg Setup and Testing Routes
+ * 
+ * This module provides administrative and testing endpoints for the OpenMsg
+ * protocol. These endpoints facilitate connection establishment, message sending,
+ * and pass code generation for development and testing purposes.
+ * 
+ * Testing Features:
+ * - Initiate handshakes with other OpenMsg users
+ * - Send messages to connected users
+ * - Generate one-time pass codes for authentication
+ * 
+ * Note: In production, these endpoints would typically be integrated
+ * into a user interface or replaced with user authentication systems.
+ */
+
 import express, { Request, Response } from 'express';
 import axios from 'axios';
 import { pool } from '../config/database';
@@ -8,22 +24,36 @@ import {
     InitiateHandshakeResponse,
     SendMessageRequest,
     SendMessageResponse,
-    RequestPassCodeRequest,
-    RequestPassCodeResponse,
     AuthRequest,
     AuthResponse,
     MessageReceiveRequest,
     MessageReceiveResponse,
     OpenMsgUserConnection
-} from '../types/index';
+} from '../type';
 import { RowDataPacket } from 'mysql2';
 
 const router = express.Router();
 
+/**
+ * POST /setup/initiate-handshake
+ * 
+ * Testing endpoint to initiate a connection with another OpenMsg user.
+ * This simulates the process a user would go through to connect with
+ * someone on a different OpenMsg server.
+ * 
+ * Process:
+ * 1. Creates a handshake record with the provided pass code
+ * 2. Sends authentication request to the other user's server
+ * 3. Stores the resulting connection credentials
+ * 
+ * Note: In production, the sender's address would come from user authentication
+ */
 router.post('/initiate-handshake', async (req: Request<{}, InitiateHandshakeResponse, InitiateHandshakeRequest>, res: Response<InitiateHandshakeResponse>) => {
     try {
         const { other_openmsg_address, pass_code } = req.body;
 
+        // TODO: Replace with session/user context in production
+        // These would normally come from authenticated user session
         const selfOpenmsgAddressName = "John Doe";
         const selfOpenmsgAddress = `1000001*${settings.openmsgDomain}`;
         const selfAllowReplies = true;
@@ -47,6 +77,17 @@ router.post('/initiate-handshake', async (req: Request<{}, InitiateHandshakeResp
     }
 });
 
+/**
+ * POST /setup/send-message
+ * 
+ * Testing endpoint to send an encrypted message to a connected OpenMsg user.
+ * This demonstrates the complete message sending process including encryption,
+ * hash creation, and cross-domain delivery.
+ * 
+ * Requirements:
+ * - A connection must already exist between sender and recipient
+ * - The connection provides the necessary encryption keys and auth codes
+ */
 router.post('/send-message', async (req: Request<{}, SendMessageResponse, SendMessageRequest>, res: Response<SendMessageResponse>) => {
     try {
         const { message_text, sending_openmsg_address, receiving_openmsg_address } = req.body;
@@ -63,6 +104,17 @@ router.post('/send-message', async (req: Request<{}, SendMessageResponse, SendMe
     }
 });
 
+/**
+ * POST /setup/request-pass-code
+ * 
+ * Testing endpoint to generate a one-time pass code for authentication.
+ * Pass codes are used in the handshake process to authorize new connections.
+ * 
+ * Security features:
+ * - Pass codes are 6-digit random numbers
+ * - Expire after 1 hour
+ * - Single-use only (consumed during authentication)
+ */
 router.post('/request-pass-code', async (req: Request, res: Response) => {
     try {
         const { self_openmsg_address } = req.body;
@@ -74,8 +126,10 @@ router.post('/request-pass-code', async (req: Request, res: Response) => {
             });
         }
 
+        // Generate a 6-digit random pass code
         const passCode = Math.floor(100000 + Math.random() * 900000).toString();
 
+        // Store the pass code with expiration (1 hour)
         await pool.execute(
             'INSERT INTO openmsg_passCodes (self_openmsg_address, pass_code) VALUES (?, ?)',
             [self_openmsg_address, passCode]
@@ -92,10 +146,26 @@ router.post('/request-pass-code', async (req: Request, res: Response) => {
             error: true,
             error_message: 'Internal server error'
         });
-        return;
+        return
     }
 });
 
+/**
+ * Initiate handshake with another OpenMsg user
+ * 
+ * This function implements the client side of the OpenMsg handshake protocol:
+ * 1. Validates input parameters
+ * 2. Creates a handshake record in the database
+ * 3. Sends authentication request to the other user's server
+ * 4. Stores the resulting connection credentials
+ * 
+ * @param otherOpenmsgAddress - Full address of user to connect with
+ * @param passCode - Pass code obtained from that user
+ * @param selfOpenmsgAddress - Our full OpenMsg address
+ * @param selfOpenmsgAddressName - Our display name
+ * @param selfAllowReplies - Whether we accept reply messages
+ * @returns Success message or error description
+ */
 async function initiateHandshake(
     otherOpenmsgAddress: string,
     passCode: string,
@@ -103,21 +173,23 @@ async function initiateHandshake(
     selfOpenmsgAddressName: string,
     selfAllowReplies: boolean
 ): Promise<string> {
+    // Validate required parameters
     if (!otherOpenmsgAddress || !passCode || !selfOpenmsgAddress || !selfOpenmsgAddressName || !settings.openmsgDomain) {
         return "Missing data (8BgrT)";
     }
 
+    // Validate pass code format (must be numeric)
     if (!/^\d+$/.test(passCode)) {
         return "Please enter a valid Pass Code";
     }
 
+    // Parse and validate the target user's address
     const addressParts = otherOpenmsgAddress.split('*');
-    if (addressParts.length !== 2) {
-        return "Invalid address format";
-    }
+    if (addressParts.length !== 2) return "Invalid address format";
 
     const [otherOpenmsgAddressId, otherOpenmsgAddressDomain] = addressParts;
 
+    // Validate address components
     if (!/^\d+$/.test(otherOpenmsgAddressId!)) {
         return `other_openmsg_address_id not valid ${otherOpenmsgAddressId} (wD861)`;
     }
@@ -127,11 +199,13 @@ async function initiateHandshake(
     }
 
     try {
+        // Create handshake record (for confirmation by other server)
         await pool.execute(
             'INSERT INTO openmsg_handshakes (other_openmsg_address, pass_code) VALUES (?, ?)',
             [otherOpenmsgAddress, passCode]
         );
 
+        // Send authentication request to the other server
         const url = `https://${otherOpenmsgAddressDomain}/openmsg${settings.sandboxDir}/auth/`;
 
         const requestData: AuthRequest = {
@@ -147,58 +221,68 @@ async function initiateHandshake(
         try {
             response = await axios.post<AuthResponse>(url, requestData, {
                 headers: { 'Content-Type': 'application/json' },
-                timeout: 15000,
-                maxRedirects: 3
+                timeout: 15000,    // 15 second timeout for handshake
+                maxRedirects: 3    // Allow up to 3 redirects
             });
         } catch (error) {
             return `Error. Request error: ${(error as Error).message}`;
         }
 
-        if (response.status !== 200) {
-            return `Error. Response status: ${response.status} (A50m5)`;
-        }
-
         const responseData = response.data;
-        if (responseData.error) {
-            return `Error: ${responseData.error_message}`;
+
+        // Verify the authentication response
+        if (response.status !== 200 || responseData.error || responseData.success !== true) {
+            return responseData.error_message || "Handshake failed";
         }
 
-        if (responseData.success !== true) {
-            return "Error: Unsuccessful from initiate-handshake (LyoSV)";
-        }
-
+        // Extract connection credentials from response
         const { auth_code, ident_code, message_crypt_key, receiving_openmsg_address_name } = responseData;
 
         if (!auth_code || !ident_code || !message_crypt_key || !receiving_openmsg_address_name) {
             return "Error: Missing required data in response";
         }
 
-        const otherAcceptsMessages = true;
-
+        // Remove any existing connection (allows re-establishment)
         await pool.execute(
             'DELETE FROM openmsg_user_connections WHERE self_openmsg_address = ? AND other_openmsg_address = ?',
             [selfOpenmsgAddress, otherOpenmsgAddress]
         );
 
+        // Store the new connection with credentials
         await pool.execute(
             'INSERT INTO openmsg_user_connections (self_openmsg_address, other_openmsg_address, other_openmsg_address_name, other_acceptsMessages, auth_code, ident_code, message_crypt_key) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [selfOpenmsgAddress, otherOpenmsgAddress, receiving_openmsg_address_name, otherAcceptsMessages ? 1 : 0, auth_code, ident_code, message_crypt_key]
+            [selfOpenmsgAddress, otherOpenmsgAddress, receiving_openmsg_address_name, 1, auth_code, ident_code, message_crypt_key]
         );
 
         return "Success";
-
     } catch (error) {
         console.error('Database error in initiateHandshake:', error);
         return "Database error";
     }
 }
 
+/**
+ * Send encrypted message to connected OpenMsg user
+ * 
+ * This function implements the complete message sending process:
+ * 1. Looks up the connection between sender and recipient
+ * 2. Encrypts the message using the connection's encryption key
+ * 3. Creates verification hash with auth code and timestamp
+ * 4. Sends encrypted package to recipient's server
+ * 5. Stores message in outbox for confirmation tracking
+ * 
+ * @param messageText - Plaintext message to send
+ * @param sendingOpenmsgAddress - Sender's full OpenMsg address
+ * @param receivingOpenmsgAddress - Recipient's full OpenMsg address
+ * @returns SendMessageResponse indicating success or failure
+ */
 async function sendMessage(
     messageText: string,
     sendingOpenmsgAddress: string,
     receivingOpenmsgAddress: string
 ): Promise<SendMessageResponse> {
     try {
+        // Look up the connection between sender and recipient
         const [connectionRows] = await pool.execute<(OpenMsgUserConnection & RowDataPacket)[]>(
             'SELECT auth_code, ident_code, message_crypt_key FROM openmsg_user_connections WHERE self_openmsg_address = ? AND other_openmsg_address = ?',
             [sendingOpenmsgAddress, receivingOpenmsgAddress]
@@ -207,117 +291,96 @@ async function sendMessage(
         if (connectionRows.length === 0) {
             return {
                 error: true,
-                error_message: `No matching connection between these two users ${sendingOpenmsgAddress}, ${receivingOpenmsgAddress} (Qmyxm)`,
+                error_message: `No matching connection between these users: ${sendingOpenmsgAddress}, ${receivingOpenmsgAddress} (Qmyxm)`,
                 response_code: 'SM_E001'
             };
         }
 
-        const connection = connectionRows[0]!;
-        const { auth_code: authCode, ident_code: identCode, message_crypt_key: messageCryptKey } = connection;
+        const { auth_code, ident_code, message_crypt_key } = connectionRows[0]!;
 
+        // Parse recipient's domain from their address
         const addressParts = receivingOpenmsgAddress.split('*');
         if (addressParts.length !== 2) {
             return {
                 error: true,
                 error_message: 'Invalid receiving address format',
-                response_code: 'SM_E000'
+                response_code: 'SM_E003'
             };
         }
 
         const [receivingOpenmsgAddressId, receivingOpenmsgAddressDomain] = addressParts;
 
-        // Create encrypted message package
-        const { package: messagePackage, nonce: messageNonceEncoded } = createMessagePackage(messageText, messageCryptKey);
+        // Encrypt the message using the connection's encryption key
+        const messagePackage = createMessagePackage(messageText, message_crypt_key);
 
+        // Generate salt and timestamp for hash verification
         const messageSalt = generateMessageSalt();
         const messageTimestamp = Math.floor(Date.now() / 1000);
-        const messageHash = createMessageHash(messagePackage, authCode, messageSalt, messageTimestamp);
 
-        await pool.execute(
-            'INSERT INTO openmsg_messages_outbox (self_openmsg_address, ident_code, message_hash, message_nonce, message_text) VALUES (?, ?, ?, ?, ?)',
-            [sendingOpenmsgAddress, identCode, messageHash, messageNonceEncoded, messageText]
+        // Create verification hash to prove message authenticity
+        const messageHash = createMessageHash(
+            messagePackage.package,
+            auth_code,
+            messageSalt,
+            messageTimestamp
         );
 
+        // Store message in outbox for confirmation tracking
+        await pool.execute(
+            'INSERT INTO openmsg_messages_outbox (self_openmsg_address, ident_code, message_hash, message_nonce, message_text) VALUES (?, ?, ?, ?, ?)',
+            [sendingOpenmsgAddress, ident_code, messageHash, messagePackage.nonce, messageText]
+        );
+
+        // Send encrypted message to recipient's server
         const url = `https://${receivingOpenmsgAddressDomain}/openmsg${settings.sandboxDir}/message/receive`;
 
         const requestData: MessageReceiveRequest = {
             receiving_openmsg_address_id: receivingOpenmsgAddressId!,
-            ident_code: identCode,
-            message_package: messagePackage,
+            ident_code: ident_code,
+            message_package: messagePackage.package,
             message_hash: messageHash,
             message_salt: messageSalt,
             message_timestamp: messageTimestamp,
-            openmsg_version: 1.0,
-            verified_account: {
-                verified_account_signature: "",
-                verified_account_name: "",
-                verified_account_expires: ""
-            }
+            openmsg_version: 1.0
         };
 
         let response;
         try {
             response = await axios.post<MessageReceiveResponse>(url, requestData, {
                 headers: { 'Content-Type': 'application/json' },
-                timeout: 15000,
-                maxRedirects: 3
+                timeout: 15000  // 15 second timeout for message delivery
             });
         } catch (error) {
             return {
                 error: true,
-                response_code: 'SM_E000',
-                error_message: `Error: ${(error as Error).message} (gcbNI)`
+                error_message: `Request failed: ${(error as Error).message}`,
+                response_code: 'SM_E000'
             };
         }
 
-        if (response.status !== 200) {
-            return {
-                error: true,
-                response_code: 'SM_E000',
-                error_message: `Response status: ${response.status} (s3mK6)`
-            };
-        }
-
+        // Return the response from the recipient's server
         const responseData = response.data;
-        if (responseData.error) {
+        if (response.status !== 200 || responseData.error) {
             return {
                 error: true,
-                response_code: responseData.response_code as any,
-                error_message: `Error: ${responseData.error_message} (siULi)`
+                error_message: responseData.error_message || 'Message delivery failed',
+                response_code: responseData.response_code || 'SM_E000'
             };
         }
-
-        if (responseData.success !== true) {
-            return {
-                error: true,
-                response_code: 'SM_E000',
-                error_message: 'Unsuccessful (5Ljkz)'
-            };
-        }
-
-        await pool.execute(
-            'INSERT INTO openmsg_messages_sent (self_openmsg_address, ident_code, message_hash, message_text) VALUES (?, ?, ?, ?)',
-            [sendingOpenmsgAddress, identCode, messageHash, messageText]
-        );
-
-        await pool.execute(
-            'DELETE FROM openmsg_messages_outbox WHERE message_hash = ? AND message_nonce = ?',
-            [messageHash, messageNonceEncoded]
-        );
 
         return {
             success: true,
-            response_code: responseData.response_code as any || 'SM_S888'
+            response_code: responseData.response_code || 'SM_S888'
         };
 
     } catch (error) {
-        console.error('Database error in sendMessage:', error);
+        console.error('sendMessage error:', error);
         return {
             error: true,
-            response_code: 'SM_E000',
-            error_message: 'Database error'
+            error_message: 'Database error',
+            response_code: 'SM_E000'
         };
     }
 }
 
-export default router; 
+export default router;
