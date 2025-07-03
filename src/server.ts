@@ -140,6 +140,9 @@ app.use((req, res) => {
  */
 export async function startServer(): Promise<void> {
     try {
+
+
+        console.log(`Database configuration:`);
         // Test database connection before starting server
         // Exit if database is not accessible
         const dbConnected = await testConnection();
