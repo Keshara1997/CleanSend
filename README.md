@@ -27,6 +27,12 @@ cd CleanSend
 
 # Install dependencies
 npm install
+# Build the project
+npm run build
+# Start the server
+npm start
+# Or for development with auto-reload
+npm run dev
 ```
 
 ## 🔐 Features

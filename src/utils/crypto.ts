@@ -105,7 +105,6 @@ export function createMessagePackage(plaintext: string, key: string): MessagePac
 export function decryptMessagePackage(packageBase64: string, key: string): string | false {
     try {
         const packageBuffer = Buffer.from(packageBase64, 'base64');
-        const nonce = packageBuffer.slice(0, 16);
         const authTag = packageBuffer.slice(-16);
         const encrypted = packageBuffer.slice(16, -16);
 

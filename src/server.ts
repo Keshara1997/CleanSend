@@ -45,7 +45,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Request logging middleware (development only)
 // Logs all incoming HTTP requests with timestamp, method, and path
 if (settings.nodeEnv === 'development') {
-    app.use((req, res, next) => {
+    app.use((req, _res, next) => {
         console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
         next();
     });
@@ -53,7 +53,7 @@ if (settings.nodeEnv === 'development') {
 
 // Health check endpoint for monitoring and load balancer checks
 // Returns server status, configuration, and version information
-app.get('/health', (req, res) => {
+app.get('/health', (_req, res) => {
     res.json({
         status: 'ok',
         timestamp: new Date().toISOString(),
@@ -85,7 +85,7 @@ app.use(`${baseUrl}/setup`, setupRoutes);
 
 // Protocol information endpoint
 // Returns OpenMsg protocol details and available API endpoints
-app.get(`${baseUrl}/info`, (req, res) => {
+app.get(`${baseUrl}/info`, (_req, res) => {
     res.json({
         protocol: 'OpenMsg',
         version: '1.0.0',
@@ -102,7 +102,7 @@ app.get(`${baseUrl}/info`, (req, res) => {
 });
 
 // Root endpoint - provides basic server information and navigation
-app.get('/', (req, res) => {
+app.get('/', (_req, res) => {
     res.json({
         message: 'OpenMsg Protocol Server (TypeScript)',
         version: '1.0.0',
@@ -113,7 +113,7 @@ app.get('/', (req, res) => {
 
 // Global error handling middleware
 // Catches any unhandled errors and returns a standardized error response
-app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     console.error('Error:', err);
     res.status(500).json({
         error: true,
@@ -122,7 +122,7 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
 });
 
 // 404 handler for undefined routes
-app.use((req, res) => {
+app.use((_req, res) => {
     res.status(404).json({
         error: true,
         error_message: 'Endpoint not found'

@@ -1,16 +1,45 @@
 {
   "name": "cleansend",
-  "version": "1.0.1",
-  "description": "CleanSend",
-  "main": "server.ts",
+  "version": "1.0.2",
+  "description": "A TypeScript implementation of the OpenMsg Protocol - secure, decentralized messaging system with end-to-end encryption for cross-domain communication",
+  "main": "dist/server.js",
+  "types": "dist/server.d.ts",
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "LICENSE"
+  ],
   "keywords": [
     "cleansend",
+    "openmsg",
     "messaging",
     "secure",
     "protocol",
-    "typescript"
+    "typescript",
+    "encryption",
+    "decentralized",
+    "end-to-end-encryption",
+    "cross-domain",
+    "messaging-protocol",
+    "secure-communication",
+    "aes-256-gcm",
+    "nodejs",
+    "express",
+    "mysql"
   ],
   "author": "Keshara1997",
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Keshara1997/CleanSend.git"
+  },
+  "homepage": "https://github.com/Keshara1997/CleanSend#readme",
+  "bugs": {
+    "url": "https://github.com/Keshara1997/CleanSend/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "build": "tsc",
     "start": "npm run build && node dist/server.js",
@@ -18,7 +47,8 @@
     "setup": "npm run build && node dist/setup/setup.js",
     "watch": "tsc --watch",
     "clean": "rimraf dist",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run clean && npm run build"
   },
   "dependencies": {
     "axios": "^1.6.2",
@@ -38,6 +68,5 @@
     "ts-node": "^10.9.1",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.3.2"
-  },
-  "license": "ISC"
+  }
 }
