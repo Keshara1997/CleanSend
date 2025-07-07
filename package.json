@@ -1,6 +1,6 @@
 {
   "name": "cleansend",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "A TypeScript implementation of the OpenMsg Protocol - secure, decentralized messaging system with end-to-end encryption for cross-domain communication",
   "main": "dist/server.js",
   "types": "dist/server.d.ts",
